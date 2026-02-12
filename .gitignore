@@ -162,3 +162,5 @@ cython_debug/
 # Resource file
 *.mp4
 *.json
+debug/
+detected/

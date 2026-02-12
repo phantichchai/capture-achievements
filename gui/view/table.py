@@ -19,7 +19,7 @@ class TableView(tk.Frame):
 
         self.wrapper1.pack(fill="x", padx=20, pady=20)
         self.wrapper2.pack(fill="both", expand="yes",padx=20, pady=20)
-        self.tree = ttk.Treeview(self.wrapper2)
+        self.tree = ttk.Treeview(self.wrapper2, selectmode="extended")
 
         # Define columns
         self.columns = ("Achievement", "Description", "Requirements", "Hidden?", "Type", "Version")

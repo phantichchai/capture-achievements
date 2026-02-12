@@ -1,64 +1,99 @@
 import cv2
-import tempfile
+import json
 import os
-import time
+from process.achievement_title_matcher import AchievementTitleMatcher
 
-class VideoProcessor:
-    def __init__(self, video_path):
-        self.temp_folder = tempfile.TemporaryDirectory()
-        self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
-        self.frame_rate = 60
-        self.prev = time.time()
-        self.n = 0
-        self.temp_folder_path = self.temp_folder.name
-        self.extension = ".png"
+class AchievementVideoProcessor:
+    def __init__(self, template_path, ocr, threshold=0.8, json_path="achievements.json"):
+        self.template = cv2.imread(template_path, 0)
+        self.template_w, self.template_h = self.template.shape[::-1]
+        self.threshold = threshold
+        self.ocr = ocr
+        self.json_path = json_path
 
-    def process_video(self):
-        try:
-            while self.cap.isOpened():
-                time_elapsed = time.time() - self.prev
-                ret, frame = self.cap.read()
+        # Load existing JSON if exists
+        if os.path.exists(self.json_path):
+            with open(self.json_path, "r", encoding="utf-8") as f:
+                self.results = json.load(f)
+        else:
+            self.results = []
 
-                if not ret:
-                    print("Can't receive frame (stream end?). Exiting ...")
-                    break
+        # Faster lookup set
+        self.detected_titles = {
+            item.get("title") for item in self.results if item.get("title")
+        }
+        
+        with open("all_achievements.json", "r", encoding="utf-8") as f:
+            all_achievements = json.load(f)
 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                _, threshold = cv2.threshold(gray, 195, 255, cv2.THRESH_BINARY)
-                
-                contours, _ = cv2.findContours(
-                    threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        self.matcher = AchievementTitleMatcher(all_achievements)
 
-                relevant_frame = None
-                for contour in contours:
-                    x, y, w, h = cv2.boundingRect(contour)
-                    if 1000 < w < 1066 and 10 < h < 200:
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
-                        relevant_frame = gray[y:y+h, x:x+w]
+    def _detect_popup(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        result = cv2.matchTemplate(gray, self.template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-                cv2.imshow('frame', frame)
-                if time_elapsed > 1.0 / self.frame_rate and relevant_frame is not None:
-                    self.prev = time.time()
-                    frame_filename = f"{self.n:04d}{self.extension}"
-                    frame_path = os.path.join(self.temp_folder_path, frame_filename)
-                    cv2.imwrite(frame_path, relevant_frame)
-                    self.n += 1
+        if max_val >= self.threshold:
+            x, y = max_loc
 
-                if cv2.waitKey(1) == ord('q'):
-                    break
+            popup_width = 1050
+            popup_height = 110
 
-        except Exception as e:
-            print("An error occurred:", str(e))
+            return frame[y:y+popup_height, x:x+popup_width]
 
-        finally:
-            self.cap.release()
-            cv2.destroyAllWindows()
+        return None
 
-    def cleanup(self):
-        self.temp_folder.cleanup()
+    def _save_json(self):
+        with open(self.json_path, "w", encoding="utf-8") as f:
+            json.dump(self.results, f, indent=4, ensure_ascii=False)
 
-# Example usage
+    def process_video(self, video_path):
+        cap = cv2.VideoCapture(video_path)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            popup = self._detect_popup(frame)
+            if popup is None:
+                continue
+
+            # OCR extraction
+            data = self.ocr.extract_from_image_array(popup)
+
+            ocr_title = data.get("title")
+
+            matched_title = self.matcher.match(ocr_title)
+
+            if matched_title:
+                data["title"] = matched_title
+            else:
+                print("Could not confidently match:", ocr_title)
+                continue
+
+            if matched_title in self.detected_titles:
+                continue
+
+            print("New achievement detected:", data)
+
+            self.results.append(data)
+            self.detected_titles.add(matched_title)
+
+            self._save_json()
+
+        cap.release()
+        return self.results
+
 if __name__ == "__main__":
-    video_processor = VideoProcessor("input_video.mp4")
-    video_processor.process_video()
+    from process.image_processor import AchievementOCR
+
+    ocr = AchievementOCR(debug=False)
+
+    processor = AchievementVideoProcessor(
+        template_path="template.png",
+        ocr=ocr,
+        json_path="achievements.json"
+    )
+
+    processor.process_video("genshin_capture.mp4")
