@@ -2,6 +2,8 @@ import requests
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 
+BASE_URL = "https://genshin-impact.fandom.com"
+
 class MediaWikiPageParser:
     def __init__(
         self,
@@ -101,9 +103,20 @@ class GenshinAchievement:
 
         for row in table.find_all("tr")[1:]:
             cells = row.find_all(["td", "th"])
-            row_data = [cell.get_text(strip=True) for cell in cells]
+            row_dict = {}
 
-            if row_data:
-                data.append(dict(zip(headers, row_data)))
+            for header, cell in zip(headers, cells):
+                text = cell.get_text(strip=True)
+                row_dict[header] = text
+
+                # If this is the Achievement column, extract link
+                if header == "Achievement":
+                    link_tag = cell.find("a", href=True)
+                    if link_tag:
+                        row_dict["Achievement_link"] = BASE_URL + link_tag["href"]
+
+            if row_dict:
+                data.append(row_dict)
+
         return data
         

@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 import os
 import json
+import webbrowser
 
 class TableView(tk.Frame):
     def __init__(self, 
@@ -56,6 +57,12 @@ class TableView(tk.Frame):
         self.data = self.load_data_from_json()  # Load data and store it
         self.populate_tree()
 
+        self.total_count = len(self.data)
+
+        self.progress_label = tk.Label(self.wrapper2, text="")
+        self.progress_label.pack(anchor="e", pady=(5, 0))
+
+
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         # Create an option menu with some commands
@@ -69,6 +76,8 @@ class TableView(tk.Frame):
 
         # Bind the function to the treeview
         self.tree.bind("<Button-3>", self.show_menu)
+
+        self.tree.bind("<Double-1>", self.open_achievement_link)
         
         # Bind the KeyRelease event to the search entry
         self.search_entry.bind("<KeyRelease>", lambda event: self.filter_data())
@@ -109,13 +118,16 @@ class TableView(tk.Frame):
         if data is None:
             data = self.data
         
-        # Clear existing items
         self.tree.delete(*self.tree.get_children())
         
         for item in data:
             values = (
-                item["Achievement"], item["Description"], item["Requirements"],
-                item["Hidden?"], item["Type"], item["Version"]
+                item.get("Achievement", ""),
+                item.get("Description", ""),
+                item.get("Requirements", ""),
+                item.get("Hidden?", ""),
+                item.get("Type", ""),
+                item.get("Version", "")
             )
             self.tree.insert(parent="", index="end", text="", values=values)
 
@@ -148,35 +160,80 @@ class TableView(tk.Frame):
 
     def get_selected_items(self):
         selected_items = self.tree.selection()
-        data = []
-        for item in selected_items:
-            values = self.tree.item(item, "values")
-            record = {
-                "Achievement": values[0],
-                "Description": values[1],
-                "Requirements": values[2],
-                "Hidden?": values[3],
-                "Type": values[4],
-                "Version": values[5]
-            }
-            data.append(record)
-            self.data.remove(record)
+        selected_data = []
 
-        self.tree.delete(selected_items)
-        return data
-    
+        for tree_item in selected_items:
+            values = self.tree.item(tree_item, "values")
+
+            # Find full record from self.data
+            for record in self.data:
+                if record.get("Achievement") == values[0]:
+                    selected_data.append(record)
+                    break
+
+        # Remove selected records safely
+        for record in selected_data:
+            if record in self.data:
+                self.data.remove(record)
+
+        self.tree.delete(*selected_items)
+        return selected_data
+
     def insert_data(self, data):
         for item in data:
             values = (
-                item["Achievement"], item["Description"], item["Requirements"],
-                item["Hidden?"], item["Type"], item["Version"]
-            )            
+                item.get("Achievement", ""),
+                item.get("Description", ""),
+                item.get("Requirements", ""),
+                item.get("Hidden?", ""),
+                item.get("Type", ""),
+                item.get("Version", "")
+            )
             self.data.append(item)
             self.tree.insert(parent="", index="end", text="", values=values)
-            
+
     def transfer_data(self):
         selected_items = self.get_selected_items()
+
         if self.other:
             self.other.insert_data(selected_items)
+
+            # 🔥 Tell main UI to recalculate progress
+            if hasattr(self, "controller"):
+                self.controller.update_progress()
         else:
             print("No other instance specified.")
+
+
+    def open_achievement_link(self, event):
+        selected = self.tree.selection()
+        if not selected:
+            return
+
+        values = self.tree.item(selected[0], "values")
+        achievement_name = values[0]
+
+        for record in self.data:
+            if record.get("Achievement") == achievement_name:
+                link = record.get("Achievement_link")
+                if link:
+                    webbrowser.open(link)
+                break
+
+    def update_progress(self):
+        if not self.other:
+            return
+
+        completed = len(self.other.data)
+        total = self.total_count + len(self.other.data)
+
+        if total == 0:
+            percent = 0
+        else:
+            percent = (completed / total) * 100
+
+        self.progress_label.config(
+            text=f"Completed: {completed}/{total} ({percent:.2f}%)"
+        )
+
+

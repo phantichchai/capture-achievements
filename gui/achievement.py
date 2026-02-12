@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 import json
 import os
 
@@ -16,12 +17,40 @@ class AchievementTrackerUI:
         self.master.title("Genshin Achievement Tracker")
         self.master.geometry("1400x750")
 
-        self.all_data = self._load_json(all_path)
-        self.account_data = self._load_json(account_path)
+        self.all_path = all_path
+        self.account_path = account_path
 
-        self.completed_data, self.uncompleted_data = self._split_data()
+        self._startup_choice()
+
+    def _startup_choice(self):
+        os.makedirs("json_data", exist_ok=True)
+
+        completed_path = os.path.join("json_data", "completed.json")
+        uncompleted_path = os.path.join("json_data", "uncompleted.json")
+
+        if os.path.exists(completed_path) and os.path.exists(uncompleted_path):
+            answer = messagebox.askyesno(
+                "Load Existing Data",
+                "Do you want to load existing saved progress?\n\n"
+                "Yes = Load saved progress\n"
+                "No = Recalculate from account file"
+            )
+
+            if answer:
+                self.completed_data = self._load_json(completed_path)
+                self.uncompleted_data = self._load_json(uncompleted_path)
+                self.all_data = self.completed_data + self.uncompleted_data
+            else:
+                self._populate_from_account()
+        else:
+            self._populate_from_account()
 
         self._build_ui()
+
+    def _populate_from_account(self):
+        self.all_data = self._load_json(self.all_path)
+        self.account_data = self._load_json(self.account_path)
+        self.completed_data, self.uncompleted_data = self._split_data()
 
     def _load_json(self, path):
         with open(path, "r", encoding="utf-8") as f:
@@ -62,25 +91,28 @@ class AchievementTrackerUI:
         with open(uncompleted_path, "w", encoding="utf-8") as f:
             json.dump(self.uncompleted_data, f, indent=4, ensure_ascii=False)
 
-        # 🔥 Create Notebook (Tabs)
-        notebook = ttk.Notebook(self.master)
-        notebook.pack(fill="both", expand=True)
+        # Store total count
+        self.total_count = len(self.all_data)
 
-        completed_tab = ttk.Frame(notebook)
-        uncompleted_tab = ttk.Frame(notebook)
+        # 🔥 Notebook
+        self.notebook = ttk.Notebook(self.master)
+        self.notebook.pack(fill="both", expand=True)
 
-        notebook.add(completed_tab, text=f"✅ Completed ({len(self.completed_data)})")
-        notebook.add(uncompleted_tab, text=f"❌ Uncompleted ({len(self.uncompleted_data)})")
+        self.completed_tab = ttk.Frame(self.notebook)
+        self.uncompleted_tab = ttk.Frame(self.notebook)
 
-        # Create TableViews inside tabs
+        self.notebook.add(self.completed_tab, text="")
+        self.notebook.add(self.uncompleted_tab, text="")
+
+        # Create tables
         self.completed_table = TableView(
-            master=completed_tab,
+            master=self.completed_tab,
             json_file="completed.json",
             transfer_label="Mark as Incomplete"
         )
 
         self.uncompleted_table = TableView(
-            master=uncompleted_tab,
+            master=self.uncompleted_tab,
             json_file="uncompleted.json",
             transfer_label="Mark as Complete"
         )
@@ -88,16 +120,61 @@ class AchievementTrackerUI:
         self.completed_table.set_other(self.uncompleted_table)
         self.uncompleted_table.set_other(self.completed_table)
 
-        # Summary label
-        total = len(self.all_data)
-        completed = len(self.completed_data)
+        # Give tables access to parent controller
+        self.completed_table.controller = self
+        self.uncompleted_table.controller = self
 
-        summary = tk.Label(
+        # Summary label
+        self.summary_label = tk.Label(
             self.master,
-            text=f"Progress: {completed} / {total}  ({round(completed/total*100, 1)}%)",
             font=("Arial", 14)
         )
-        summary.pack(pady=5)
+        self.summary_label.pack(pady=5)
+
+        self.save_button = tk.Button(
+            self.master,
+            text="💾 Save Progress",
+            command=self.save_progress,
+            font=("Arial", 12)
+        )
+        self.save_button.pack(pady=5)
+
+        self.update_progress()
+
+    def save_progress(self):
+        completed_path = os.path.join("json_data", "completed.json")
+        uncompleted_path = os.path.join("json_data", "uncompleted.json")
+
+        with open(completed_path, "w", encoding="utf-8") as f:
+            json.dump(self.completed_table.data, f, indent=4, ensure_ascii=False)
+
+        with open(uncompleted_path, "w", encoding="utf-8") as f:
+            json.dump(self.uncompleted_table.data, f, indent=4, ensure_ascii=False)
+
+        messagebox.showinfo("Saved", "Progress saved successfully!")
+
+    def update_progress(self):
+        completed = len(self.completed_table.data)
+        total = self.total_count
+
+        percent = (completed / total * 100) if total > 0 else 0
+
+        # Update summary text
+        self.summary_label.config(
+            text=f"Progress: {completed} / {total}  ({percent:.1f}%)"
+        )
+
+        # Update tab titles dynamically
+        self.notebook.tab(
+            self.completed_tab,
+            text=f"✅ Completed ({completed})"
+        )
+
+        self.notebook.tab(
+            self.uncompleted_tab,
+            text=f"❌ Uncompleted ({total - completed})"
+        )
+
 
 
 if __name__ == "__main__":
