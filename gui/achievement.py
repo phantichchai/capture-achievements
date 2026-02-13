@@ -57,13 +57,10 @@ class AchievementTrackerUI:
             return json.load(f)
 
     def _split_data(self):
-        master_titles = {
-            normalize(item["Achievement"]) for item in self.all_data
-        }
-
-        account_titles = {
-            normalize(item["title"]) for item in self.account_data
-            if normalize(item["title"]) in master_titles
+        # Build lookup dict: { normalized_title: progress_string }
+        account_progress = {
+            normalize(item["title"]): item.get("progress", "").strip()
+            for item in self.account_data
         }
 
         completed = []
@@ -71,8 +68,10 @@ class AchievementTrackerUI:
 
         for item in self.all_data:
             title_norm = normalize(item["Achievement"])
+            progress = account_progress.get(title_norm, "")
 
-            if title_norm in account_titles:
+            # ✅ Check if progress starts with "Completed"
+            if progress.lower().startswith("completed"):
                 completed.append(item)
             else:
                 uncompleted.append(item)
