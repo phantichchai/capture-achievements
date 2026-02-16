@@ -10,11 +10,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
@@ -27,8 +25,14 @@ jobs:
         if: hashFiles('requirements.txt') != ''
         run: pip install -r requirements.txt
 
-      - name: Run build script
-        run: build.bat
+      - name: Build EXE
+        run: |
+          py -m PyInstaller ^
+          --noconsole ^
+          --add-data "resources/*;resources/" ^
+          --icon "resources/icon.ico" ^
+          --clean ^
+          main.py
         shell: cmd
 
       - name: Upload EXE artifact
