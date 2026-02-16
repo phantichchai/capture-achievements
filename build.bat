@@ -5,7 +5,7 @@ set path=%cd%
 
 cd /d %path%
 
-pyinstaller ^
+python -m PyInstaller ^
 --noconsole ^
 --add-data "resources/*;resources/" ^
 --icon "resources/icon.ico" ^
