@@ -27,7 +27,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          py -m PyInstaller ^
+          pyinstaller ^
           --noconsole ^
           --add-data "resources/*;resources/" ^
           --icon "resources/icon.ico" ^
