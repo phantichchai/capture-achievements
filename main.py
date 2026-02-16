@@ -1,7 +1,11 @@
 import tkinter as tk
-from gui.main_window import GenshinImpactAchievementsApp
+from gui.achievement import AchievementTrackerUI
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = GenshinImpactAchievementsApp(root)
-    root.mainloop()
+
+root = tk.Tk()
+app = AchievementTrackerUI(
+    root,
+    all_path="all_achievements.json",
+    account_path="achievements.json"
+)
+root.mainloop()

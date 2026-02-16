@@ -1,8 +1,6 @@
 import os
 import cv2
 from paddleocr import PaddleOCR
-import numpy as np
-
 
 class AchievementOCR:
 
