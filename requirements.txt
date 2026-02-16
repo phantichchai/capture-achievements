@@ -4,6 +4,5 @@ mss==10.1.0
 opencv-contrib-python==4.10.0.84
 paddleocr==3.4.0
 paddlepaddle==3.3.0
-paddlepaddle-gpu
 paddlex==3.4.1
 PyGetWindow==0.0.9
