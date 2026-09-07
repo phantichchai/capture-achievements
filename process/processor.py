@@ -3,18 +3,20 @@
 import argparse
 import time
 import os
-from process.video_processor import VideoProcessor
+from process.video_processor import process_video_file
+from process.text_processor import update_catalogue
 
-def run_video_processor(video_path) -> (VideoProcessor|str):
+def run_video_processor(video_path):
+    """Backward-compatible CLI helper using the shared video processor."""
     json_data_folder = "json_data"
     if not os.path.exists(json_data_folder):
         os.makedirs(json_data_folder)
 
     start_time = time.time()
-    video_processor = VideoProcessor(video_path)
-    video_processor.process_video()
+    update_catalogue()
+    results = process_video_file(video_path)
     video_duration = time.time() - start_time
-    return video_processor, f"Video processing time: {video_duration:.2f} seconds"
+    return results, f"Video processing time: {video_duration:.2f} seconds"
 
 def find_and_save_matching_data(table_processor, text_data) -> str:
     start_time = time.time()

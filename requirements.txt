@@ -6,3 +6,4 @@ paddleocr==3.4.0
 paddlepaddle==3.3.0
 paddlex==3.4.1
 PyGetWindow==0.0.9
+requests>=2.31.0,<3.0.0

@@ -1,8 +1,13 @@
+import json
 import requests
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://genshin-impact.fandom.com"
+
+
+class CatalogueRefreshError(RuntimeError):
+    """Raised when the achievement catalogue cannot be fetched or updated."""
 
 class MediaWikiPageParser:
     def __init__(
@@ -119,4 +124,80 @@ class GenshinAchievement:
                 data.append(row_dict)
 
         return data
-        
+
+
+def refresh_achievement_catalogue(
+    output_path: str = "all_achievements.json",
+    strict: bool = False,
+) -> Dict[str, int]:
+    """Fetch, compare, and optionally update the local achievement catalogue.
+
+    In normal processing mode, refresh failures are warnings and the caller can
+    continue using the existing catalogue. In strict mode, failures are raised
+    so a fetch-only command can return a non-zero exit code.
+    """
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            local_achievements = json.load(f)
+
+        parser = MediaWikiPageParser()
+        remote_achievements = GenshinAchievement(parser).get_all_achievements()
+
+        if not isinstance(local_achievements, list) or not isinstance(remote_achievements, list):
+            raise ValueError("catalogue data must be a list")
+
+        local_by_title = {
+            item["Achievement"]: item
+            for item in local_achievements
+            if isinstance(item, dict) and item.get("Achievement")
+        }
+        remote_by_title = {
+            item["Achievement"]: item
+            for item in remote_achievements
+            if isinstance(item, dict) and item.get("Achievement")
+        }
+
+        added = remote_by_title.keys() - local_by_title.keys()
+        shared = remote_by_title.keys() & local_by_title.keys()
+        updated = {
+            title for title in shared
+            if remote_by_title[title] != local_by_title[title]
+        }
+        unchanged = shared - updated
+        missing_remotely = local_by_title.keys() - remote_by_title.keys()
+
+        if added or updated:
+            merged_achievements = remote_achievements + [
+                local_by_title[title]
+                for title in local_by_title
+                if title in missing_remotely
+            ]
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(merged_achievements, f, indent=4, ensure_ascii=False)
+                f.write("\n")
+
+        summary = {
+            "added": len(added),
+            "updated": len(updated),
+            "missing_remotely": len(missing_remotely),
+            "unchanged": len(unchanged),
+        }
+        print(
+            "Achievement catalogue: "
+            f"{summary['added']} added, "
+            f"{summary['updated']} updated, "
+            f"{summary['missing_remotely']} missing remotely, "
+            f"{summary['unchanged']} unchanged"
+        )
+        return summary
+    except Exception as exc:
+        message = f"Could not refresh achievement catalogue: {exc}"
+        if strict:
+            raise CatalogueRefreshError(message) from exc
+        print(f"Warning: {message}")
+        return {
+            "added": 0,
+            "updated": 0,
+            "missing_remotely": 0,
+            "unchanged": 0,
+        }
